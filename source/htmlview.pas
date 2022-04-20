@@ -1,7 +1,7 @@
 {
-Version   11.9
+Version   11.10
 Copyright (c) 1995-2008 by L. David Baldwin
-Copyright (c) 2008-2018 by HtmlViewer Team
+Copyright (c) 2008-2022 by HtmlViewer Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -40,14 +40,19 @@ uses
   Windows,
 {$endif}
   Messages, Classes, Graphics, Controls, StdCtrls, ExtCtrls, Contnrs, SysUtils,
+{$ifdef UseGenerics}
+  System.Generics.Collections,
+{$endif}
 {$ifndef NoMetafile}
-  MetaFilePrinter, vwPrint,
+  MetaFilePrinter,
 {$endif}
   UrlConn,
   URLSubs,
   HtmlGlobals,
   HtmlBuffer,
   HtmlImages,
+  HtmlPrinter,
+  vwPrint,
   HTMLUn2,
   ReadHTML,
   HTMLSubs,
@@ -150,7 +155,11 @@ type
 
   THistory = class(TObject)
   private
+{$ifdef UseGenerics}
+    FHistory: TObjectList<THistoryItem>;
+{$else}
     FHistory: TObjectList;
+{$endif}
     FIndex: Integer;
     function GetItem(Index: Integer): THistoryItem;
     function GetCount: Integer;
@@ -229,7 +238,11 @@ type
     // constructed stuff
     FFrameOwner: THtmlFrameBase; {the TViewerFrameBase that holds this THtmlViewer}
     FVisited: ThtStringList; {visited URLs}
+{$ifdef UseGenerics}
+    FObjects: TObjectList<TObject>; // objects I must free (e.g. streams created in htStreamRequest)
+{$else}
     FObjects: TObjectList; // objects I must free (e.g. streams created in htStreamRequest)
+{$endif}
 
     // stuff copied in CreateCopy
     FBase: ThtString;
@@ -306,7 +319,7 @@ type
 {$ifndef NoMetafile}
     FPage: Integer;
     FWidthRatio: Double;
-    vwP: TvwPrinter;
+    vwP: ThtPrinter;
     function CreateHeaderFooter: THtmlViewer;
 {$endif}
     function GetCursor: TCursor;
@@ -451,7 +464,7 @@ type
     function DisplayPosToXy(DisplayPos: Integer; var X, Y: Integer): Boolean;
     function Find(const S: UnicodeString; MatchCase: Boolean): Boolean;
     function FindDisplayPos(SourcePos: Integer; Prev: Boolean): Integer;
-    function FindEx(const S: UnicodeString; MatchCase, Reverse: Boolean): Boolean;
+    function FindEx(const S: UnicodeString; MatchCase, AReverse: Boolean): Boolean;
     function FindSourcePos(DisplayPos: Integer): Integer;
     function FullDisplaySize(FormatWidth: Integer): TSize;
     function GetCharAtPos(Pos: Integer; var Ch: WideChar; var Font: TFont): Boolean;
@@ -469,7 +482,7 @@ type
     procedure OpenPrint;
     procedure ClosePrint;
     procedure AbortPrint;
-    procedure Print(FromPage: Integer = 1; ToPage: Integer = MaxInt; Prn: TvwPrinter = nil); overload;
+    procedure Print(FromPage: Integer = 1; ToPage: Integer = MaxInt; Prn: ThtPrinter = nil); overload;
     function PrintPreview(Prn: TMetaFilePrinter; NoOutput: Boolean = False; FromPage: Integer = 1; ToPage: Integer = MaxInt): Integer; virtual;
     // print or preview:
     function Print(Prn: ThtPrinter; FromPage: Integer; ToPage: Integer; Mode: ThtPrintPreviewMode = ppAuto): Integer; overload;
@@ -731,7 +744,7 @@ type
 //-- BG ---------------------------------------------------------- 12.05.2013 --
 procedure InitFileTypes;
 const
-  FileTypeDefinitions: array [1..23] of TFileTypeRec = (
+  FileTypeDefinitions: array [1..34] of TFileTypeRec = (
     (FileExt: '.htm';   FileType: HTMLType),
     (FileExt: '.html';  FileType: HTMLType),
 
@@ -742,6 +755,8 @@ const
 
     (FileExt: '.xhtml'; FileType: XHtmlType),
     (FileExt: '.xht';   FileType: XHtmlType),
+
+    (FileExt: '.txt';   FileType: TextType),
 
     (FileExt: '.gif';   FileType: ImgType),
     (FileExt: '.jpg';   FileType: ImgType),
@@ -760,7 +775,19 @@ const
     (FileExt: '.tiff';  FileType: ImgType),
     (FileExt: '.tif';   FileType: ImgType),
 
-    (FileExt: '.txt';   FileType: TextType)
+    (FileExt: '.mp3';   FileType: AudioType),
+    (FileExt: '.ogg';   FileType: AudioType),
+
+    (FileExt: '.mp4';   FileType: VideoType),
+    (FileExt: '.webm';  FileType: VideoType),
+    (FileExt: '.mkv';   FileType: VideoType),
+    (FileExt: '.mpg';   FileType: VideoType),
+    (FileExt: '.mpeg';  FileType: VideoType),
+    (FileExt: '.wmv';   FileType: VideoType),
+    (FileExt: '.flv';   FileType: VideoType),
+    (FileExt: '.avi';   FileType: VideoType),
+
+    (FileExt: '.pdf';   FileType: PdfType)
   );
 var
   I: Integer;
@@ -908,7 +935,11 @@ begin
 
   FHistory := ThvHistory.Create;
   FVisited := ThtStringList.Create;
+{$ifdef UseGenerics}
+  FObjects := TObjectList<TObject>.Create;
+{$else}
   FObjects := TObjectList.Create;
+{$endif}
 
   FHTMLTimer := TTimer.Create(Self);
   FHTMLTimer.Enabled := False;
@@ -1332,7 +1363,7 @@ begin
       end;
     finally
       Exclude(FViewerState, vsDontDraw);
-      if LoadCursor <> crNone then
+      if LoadCursor <> crDefault then
         Screen.Cursor := OldCursor;
     end;
   finally
@@ -2660,9 +2691,14 @@ begin
     Exit;
   if Value <> FSectionList.ShowImages then
   begin
-    OldCursor := Screen.Cursor;
+    if LoadCursor <> crDefault then
+    begin
+      OldCursor := Screen.Cursor;
+      Screen.Cursor := LoadCursor;
+    end
+    else
+      OldCursor := crDefault; // valium for the compiler
     try
-      Screen.Cursor := crHourGlass;
       SetProcessing(True);
       FSectionList.ShowImages := Value;
       if FSectionList.Count > 0 then
@@ -2674,7 +2710,8 @@ begin
         Invalidate;
       end;
     finally
-      Screen.Cursor := OldCursor;
+      if LoadCursor <> crDefault then
+        Screen.Cursor := OldCursor;
       SetProcessing(False);
     end;
   end;
@@ -3884,6 +3921,7 @@ begin
   OK := False;
   if (MediaQuery.MediaType in [mtAll, mtScreen]) xor MediaQuery.Negated then
   begin
+	OK := True; // even there are no expressions, we force to re-init OK-value valid, because it matches
     for I := Low(MediaQuery.Expressions) to High(MediaQuery.Expressions) do
     begin
       OK := EvaluateExpression(MediaQuery.Expressions[I]);
@@ -3907,7 +3945,7 @@ end;
 
 {$ifndef NoMetafile}
 
-procedure THtmlViewer.Print(FromPage, ToPage: Integer; Prn: TvwPrinter);
+procedure THtmlViewer.Print(FromPage, ToPage: Integer; Prn: ThtPrinter);
 var
   Done: Boolean;
 begin
@@ -3924,7 +3962,7 @@ begin
     Print(vwP, FromPage, ToPage, ppMultiPrint)
   else
   begin
-    Prn := TvwPrinter.Create;
+    Prn := TvwPrinter.Create(Self);
     try
       Print(Prn, FromPage, ToPage, ppSinglePrint);
     finally
@@ -3938,7 +3976,7 @@ end;
 procedure THtmlViewer.OpenPrint;
 begin
   if vwP = nil then
-    vwP := TvwPrinter.Create;
+    vwP := TMetaFilePrinter.Create(Self);
 end;
 
 procedure THtmlViewer.ClosePrint;
@@ -4239,8 +4277,7 @@ begin
         if Margins.Bottom < 0 then
           Margins.Bottom := 0; { assume no bottom printing offset }
 
-        { which results in LowerRightPoint containing the BOTTOM and RIGHT unprintable area offset;
-          using these we modify the (logical, true) borders...}
+        { using these Margins we modify the (logical, true) borders...}
 
         Wx            := WDpi / XDpi;
         MLeftPrn      := Trunc(PrintMarginLeft / 2.54 * XDpi) - Margins.Left;
@@ -4625,7 +4662,7 @@ begin
   Result := FindEx(S, MatchCase, False);
 end;
 
-function THtmlViewer.FindEx(const S: UnicodeString; MatchCase, Reverse: Boolean): Boolean;
+function THtmlViewer.FindEx(const S: UnicodeString; MatchCase, AReverse: Boolean): Boolean;
 var
   Curs: Integer;
   X: Integer;
@@ -4641,7 +4678,7 @@ begin
       S1 := S
     else
       S1 := htLowerCase(S);
-    if Reverse then
+    if AReverse then
       Curs := FindStringR(CaretPos, S1, MatchCase)
     else
       Curs := FindString(CaretPos, S1, MatchCase);
@@ -4650,7 +4687,7 @@ begin
       Result := True;
       SelB := Curs;
       SelE := Curs + Length(S);
-      if Reverse then
+      if AReverse then
         CaretPos := SelB
       else
         CaretPos := SelE;
@@ -5702,7 +5739,11 @@ end;
 constructor THistory.Create;
 begin
   inherited Create;
+{$ifdef UseGenerics}
+  FHistory := TObjectList<THistoryItem>.Create;
+{$else}
   FHistory := TObjectList.Create;
+{$endif}
 end;
 
 //-- BG ---------------------------------------------------------- 02.01.2012 --

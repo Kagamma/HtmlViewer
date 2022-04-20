@@ -1,7 +1,7 @@
 {
-Version   11.7
+Version   11.10
 Copyright (c) 1995-2008 by L. David Baldwin,
-Copyright (c) 2008-2016 by HtmlViewer Team
+Copyright (c) 2008-2022 by HtmlViewer Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -37,6 +37,9 @@ uses
   Windows,
 {$endif}
   Classes, Graphics, SysUtils, Math, Forms, Contnrs, Variants,
+{$ifdef UseGenerics}
+  System.Generics.Collections,
+{$endif}
   //
   HtmlBuffer,
   HtmlFonts,
@@ -89,12 +92,13 @@ type
 
     // the below properties are in MarginArrays
     BackgroundColor, BackgroundImage, BackgroundPosition, BackgroundRepeat, BackgroundAttachment,
-    piMinHeight, piMinWidth, piMaxHeight, piMaxWidth, BoxSizing,
+    BoxSizing,
     MarginTop, MarginRight, MarginBottom, MarginLeft,
     PaddingTop, PaddingRight, PaddingBottom, PaddingLeft,
     BorderTopWidth, BorderRightWidth, BorderBottomWidth, BorderLeftWidth,
     BorderTopColor, BorderRightColor, BorderBottomColor, BorderLeftColor,
     BorderTopStyle, BorderRightStyle, BorderBottomStyle, BorderLeftStyle,
+    piMinHeight, piMinWidth, piMaxHeight, piMaxWidth,
     piWidth, piHeight, piTop, piRight, piBottom, piLeft,
     BorderSpacingHorz, BorderSpacingVert,  //These two are internal
     // the above properties are in MarginArrays
@@ -134,12 +138,13 @@ const
 
     // these properties are in MarginArrays
     'background-color', 'background-image', 'background-position', 'background-repeat', 'background-attachment',
-    'min-height', 'min-width', 'max-height', 'max-width', 'box-sizing',
+    'box-sizing',
     'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
     'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
     'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
     'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
     'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+    'min-height', 'min-width', 'max-height', 'max-width',
     'width', 'height', 'top', 'right', 'bottom', 'left',
     'thv-border-spacing-horz', 'thv-border-spacing-vert', //These two are for internal use only
 
@@ -282,12 +287,19 @@ type
     property DefPointSize : Double read FDefPointSize write FDefPointSize;
   end;
 
+{$ifdef UseGenerics}
+  TPropStack = class(TObjectList<TProperties>)
+{$else}
   TPropStack = class(TObjectList)
   private
     function GetProp(Index: Integer): TProperties; {$ifdef UseInline} inline; {$endif}
+{$endif}
   public
     function Last: TProperties; {$ifdef UseInline} inline; {$endif}
+{$ifdef UseGenerics}
+{$else}
     property Items[Index: Integer]: TProperties read GetProp; default;
+{$endif}
   end;
 
 type
@@ -1643,7 +1655,12 @@ end;
 function VarIsAuto(const Value: Variant): Boolean;
  {$ifdef UseInline} inline; {$endif}
 begin
-  Result := (VarType(Value) in varInt) and (Value = Auto);
+  if VarType(Value) in varInt then
+    Result := Value = Auto
+  else if VarIsStr(Value) then
+    Result := Value = 'auto'
+  else
+    Result := False;
 end;
 
 //-- BG ---------------------------------------------------------- 05.10.2010 --
@@ -1811,8 +1828,7 @@ begin
           end;
         end;
 
-      piMinHeight, piMaxHeight,
-      piHeight:
+      piMinHeight, piMaxHeight:
         begin
           if VarIsStr(VM[I]) then
           begin
@@ -1829,6 +1845,25 @@ begin
           end
           else
             M[I] := 0;
+        end;
+
+      piHeight:
+        begin
+          if VarIsStr(VM[I]) then
+          begin
+            M[I] := LengthConv(VM[I], False, Base(I), EmSize, ExSize, Auto); {Auto will be Auto}
+            if Pos('%', VM[I]) > 0 then {include border in % heights}
+              M[I] := M[I] - M[BorderTopWidth] - M[BorderBottomWidth] - M[PaddingTop] - M[PaddingBottom];
+          end
+          else if VarType(VM[I]) in varInt then
+          begin
+            if VM[I] = IntNull then
+              M[I] := 0
+            else
+              M[I] := VM[I];
+          end
+          else
+            M[I] := Auto;
         end;
 
       PaddingTop..PaddingLeft,BorderSpacingHorz,BorderSpacingVert:
@@ -1918,7 +1953,11 @@ begin
       piMaxWidth:
         begin
           if VarIsStr(VM[I]) then
-            M[I] := LengthConv(VM[I], False, BaseWidth, EmSize, ExSize, Auto)
+          begin
+            M[I] := LengthConv(VM[I], False, BaseWidth, EmSize, ExSize, Auto);
+            if Pos('%', VM[I]) > 0 then {include border in % heights}
+              M[I] := M[I] - M[BorderLeftWidth] - M[BorderRightWidth] - M[PaddingLeft] - M[PaddingRight];
+          end
           else if VarType(VM[I]) in varInt then
           begin
             if VM[I] = IntNull then
@@ -1933,7 +1972,16 @@ begin
       piWidth:
         begin
           if VarIsStr(VM[I]) then
-            M[I] := LengthConv(VM[I], False, BaseWidth, EmSize, ExSize, Auto)
+          begin
+            if VM[I] = 'auto' then
+              M[I] := Auto
+            else
+            begin
+              M[I] := LengthConv(VM[I], False, BaseWidth, EmSize, ExSize, Auto);
+              if Pos('%', VM[I]) > 0 then {include border in % heights}
+                M[I] := M[I] - M[BorderLeftWidth] - M[BorderRightWidth] - M[PaddingLeft] - M[PaddingRight];
+            end;
+          end
           else if VarType(VM[I]) in varInt then
           begin
             if VM[I] = IntNull then
@@ -3537,14 +3585,17 @@ end;
 
 { TPropStack }
 
+{$ifdef UseGenerics}
+{$else}
 function TPropStack.GetProp(Index: Integer): TProperties;
 begin
   Result := Get(Index); //TProperties(inherited Items[Index]);
 end;
+{$endif}
 
 function TPropStack.Last: TProperties;
 begin
-  Result := Get(Count - 1);
+  Result := TProperties(inherited Items[Count - 1]);
 end;
 
 const

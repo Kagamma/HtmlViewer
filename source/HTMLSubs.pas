@@ -1,7 +1,7 @@
 {
-Version   11.9
+Version   11.10
 Copyright (c) 1995-2008 by L. David Baldwin
-Copyright (c) 2008-2018 by HtmlViewer Team
+Copyright (c) 2008-2022 by HtmlViewer Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -66,16 +66,22 @@ unit HTMLSubs;
 interface
 
 uses
- {$ifdef UseInline}
- HtmlCaches,
- {$endif}
+{$ifdef UseInline}
+  HtmlCaches,
+{$endif}
 {$ifdef VCL}
   Windows,
+  {$ifdef Compiler20_Plus}
+    CommCtrl,
+  {$endif}
   {$ifndef Compiler28_Plus}
-  EncdDecd,
+    EncdDecd,
   {$endif}
 {$endif}
   Messages, Graphics, Controls, ExtCtrls, Classes, SysUtils, Variants, Forms, Math, Contnrs, ComCtrls,
+{$ifdef UseGenerics}
+  System.Generics.Collections,
+{$endif}
 {$ifdef LCL}
   LclIntf, LclType, Types, HtmlMisc,
 {$endif}
@@ -187,6 +193,40 @@ type
   TLinkList = class(TFontList)
   public
     constructor Create;
+  end;
+
+  // BG, 06.02.2022: moved from implementation section
+  ThtInlineRec = class
+  private
+    StartB, EndB, IDB, StartBDoc, EndBDoc: Integer;
+    MargArray: ThtMarginArray;
+  end;
+
+{$ifdef UseGenerics}
+  TInlineList = class(TObjectList<ThtInlineRec>)
+{$else}
+  TInlineList = class(TObjectList) {a list of ThtInlineRec's}
+{$endif}
+  private
+    NeedsConverting: Boolean;
+    Owner: ThtDocument;
+    procedure AdjustValues;
+{$ifdef UseGenerics}
+{$else}
+    function Get(Index: Integer): ThtInlineRec; {$ifdef UseInline} inline; {$endif}
+{$endif}
+    function GetStartB(I: Integer): Integer;
+    function GetEndB(I: Integer): Integer;
+  public
+    constructor Create(AnOwner: ThtDocument);
+{$ifdef UseGenerics}
+    procedure Clear; virtual;
+{$else}
+    procedure Clear; override;
+    property Items[Index: Integer]: ThtInlineRec read Get; default;
+{$endif}
+    property StartB[I: Integer]: Integer read GetStartB;
+    property EndB[I: Integer]: Integer read GetEndB;
   end;
 
 //------------------------------------------------------------------------------
@@ -308,14 +348,21 @@ type
     procedure MinMaxWidth(Canvas: TCanvas; out Min, Max: Integer; AvailableWidth, AvailableHeight: Integer); virtual;
   end;
 
+{$ifdef UseGenerics}
+  TSectionBaseList = class(TObjectList<TSectionBase>)
+{$else}
   TSectionBaseList = class(TObjectList)
   private
     function GetItem(Index: Integer): TSectionBase; {$ifdef UseInline} inline; {$endif}
+{$endif}
   public
     function PtInObject(X, Y: Integer; var Obj: TObject; var IX, IY: Integer): Boolean;
     function CursorToXY(Canvas: TCanvas; Cursor: Integer; var X, Y: Integer): Boolean; virtual;
     function FindDocPos(SourcePos: Integer; Prev: Boolean): Integer; virtual;
+{$ifdef UseGenerics}
+{$else}
     property Items[Index: Integer]: TSectionBase read GetItem; default;
+{$endif}
   end;
 
 //------------------------------------------------------------------------------
@@ -369,10 +416,14 @@ type
 
   TImageObj = class;
 
+{$ifdef UseGenerics}
+  TFloatingObjList = class(TObjectList<TFloatingObj>)   {a list of TFloatingObj's}
+{$else}
   TFloatingObjList = class(TObjectList)   {a list of TFloatingObj's}
   private
     function GetItem(Index: Integer): TFloatingObj; {$ifdef UseInline} inline; {$endif}
     procedure SetItem(Index: Integer; const Item: TFloatingObj); {$ifdef UseInline} inline; {$endif}
+{$endif}
   public
     constructor CreateCopy(Parent: TCellBasic; T: TFloatingObjList);
     procedure Decrement(N: Integer); {$ifdef UseInline} inline; {$endif}
@@ -381,7 +432,10 @@ type
     function GetObjectAt(Posn: Integer; out Obj): Integer;
     function PtInImage(X, Y: Integer; out IX, IY, Posn: Integer; out AMap, UMap: Boolean; out MapItem: TMapItem; out ImageObj: TImageObj): Boolean;
     function PtInObject(X, Y: Integer; out Obj: TObject; out IX, IY: Integer): Boolean;
+{$ifdef UseGenerics}
+{$else}
     property Items[Index: Integer]: TFloatingObj read GetItem write SetItem; default;
+{$endif}
   end;
 
 //------------------------------------------------------------------------------
@@ -539,11 +593,15 @@ type
     procedure DrawInline(Canvas: TCanvas; X, Y, YBaseline: Integer; FO: TFontObj); override;
   end;
 
+{$ifdef UseGenerics}
+  TPanelObjList = class(TObjectList<TPanelObj>)
+{$else}
   TPanelObjList = class(TObjectList)
   private
     function Get(Index: Integer): TPanelObj; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: TPanelObj read Get; default;
+{$endif}
   end;
 
   // inline frame node
@@ -631,7 +689,20 @@ type
     procedure ReplaceImage(NewImage: TStream);
   end;
 
+  TImageRec = class(TObject)
+  public
+    AObj: TImageObj;
+    ACanvas: TCanvas;
+    AX, AY: Integer;
+    AYBaseline: Integer;
+    AFO: TFontObj;
+  end;
+
+{$ifdef UseGenerics}
+  TDrawList = class(TObjectList<TImageRec>)
+{$else}
   TDrawList = class(TObjectList)
+{$endif}
     procedure AddImage(Obj: TImageObj; Canvas: TCanvas; X, Y, YBaseline: Integer; FO: TFontObj);
     procedure DrawImages;
   end;
@@ -655,12 +726,16 @@ type
       {$ifdef has_StyleElements}; const AStyleElements : TStyleElements{$endif}); //overload;
   end;
 
+{$ifdef UseGenerics}
+  ThtBorderRecList = class(TObjectList<ThtBorderRec>);
+{$else}
   ThtBorderRecList = class(TObjectList)
   private
     function Get(Index: Integer): ThtBorderRec; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: ThtBorderRec read Get; default;
   end;
+{$endif}
 
   ThtLineRec = class {holds info on a line of text}
   private
@@ -685,12 +760,16 @@ type
     destructor Destroy; override;
   end;
 
+{$ifdef UseGenerics}
+  TLineRecList = class(TObjectList<ThtLineRec>);
+{$else}
   TLineRecList = class(TObjectList)
   private
     function Get(Index: Integer): ThtLineRec; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: ThtLineRec read Get; default;
   end;
+{$endif}
 
   PXArray = array of Integer;
 
@@ -700,12 +779,16 @@ type
     Index: Integer;
   end;
 
+{$ifdef UseGenerics}
+  ThtIndexObjList = class(TObjectList<ThtIndexObj>);
+{$else}
   ThtIndexObjList = class(TObjectList)
   private
     function Get(Index: Integer): ThtIndexObj; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: ThtIndexObj read Get; default;
   end;
+{$endif}
 
   ThtTextWrap = (
     twNo,      // 'n'
@@ -923,12 +1006,16 @@ type
     procedure AKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
   end;
 
+{$ifdef UseGenerics}
+  THtmlFormList = class(TObjectList<THtmlForm>);
+{$else}
   THtmlFormList = class(TObjectList)
   private
     function Get(Index: Integer): THtmlForm; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: THtmlForm read Get; default;
   end;
+{$endif}
 
   TFormControlObj = class(TFloatingObj)
   private
@@ -1173,6 +1260,8 @@ type
     FHzSpace: Integer;
     FVrSpace: Integer;
     FSpecWd: TSpecWidth; {Width attribute (percentage or absolute)}
+    FSpecWdMin: TSpecWidth;
+    FSpecWdMax: TSpecWidth;
     FSpecHt: TSpecWidth; {Height as specified}
     // END: this area is copied by move() in AssignTo()
     function GetCell: TCellObjCell; virtual; abstract;
@@ -1191,6 +1280,8 @@ type
 //    property SpecHtType: TWidthType read FSpecHt.VType write FSpecHt.VType; {Height as specified}
 //    property SpecHtValue: Double read FSpecHt.Value write FSpecHt.Value; {Height as specified}
     property SpecWd: TSpecWidth read FSpecWd write FSpecWd; {Width as specified}
+    property SpecWdMin: TSpecWidth read FSpecWdMin write FSpecWdMin;
+    property SpecWdMax: TSpecWidth read FSpecWdMax write FSpecWdMax;
 // BG, 12.01.2012: not C++-Builder compatible
 //    property SpecWdType: TWidthType read FSpecWd.VType write FSpecWd.VType; {Height as specified}
 //    property SpecWdValue: Double read FSpecWd.Value write FSpecWd.Value; {Height as specified}
@@ -1291,10 +1382,14 @@ type
     property YIndent: Integer read FYIndent write FYIndent; {Vertical indent}
   end;
 
+{$ifdef UseGenerics}
+  TCellList = class(TObjectList<TCellObjBase>)
+{$else}
   TCellList = class(TObjectList)
   {holds one row of the html table, a list of TCellObj}
   private
     function GetCellObj(Index: Integer): TCellObjBase; {$ifdef UseInline} inline; {$endif}
+{$endif}
   public
     RowHeight: Integer;
     SpecRowHeight: TSpecWidth;
@@ -1315,16 +1410,23 @@ type
     function Draw(Canvas: TCanvas; Document: ThtDocument; const ARect: TRect; const Widths: TIntArray;
       X, Y, YOffset, CellSpacingHorz,CellSpacingVert: Integer; Border: Boolean; Light, Dark: TColor; MyRow: Integer): Integer;
     procedure Add(CellObjBase: TCellObjBase);
+{$ifdef UseGenerics}
+{$else}
     property Items[Index: Integer]: TCellObjBase read GetCellObj; default;
+{$endif}
   end;
 
   // BG, 26.12.2011:
+{$ifdef UseGenerics}
+  TRowList = class(TObjectList<TCellList>);
+{$else}
   TRowList = class(TObjectList)
   private
     function GetItem(Index: Integer): TCellList; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: TCellList read GetItem; default;
   end;
+{$endif}
 
   TColSpec = class
   private
@@ -1340,12 +1442,16 @@ type
   end;
 
   // BG, 26.12.2011:
+{$ifdef UseGenerics}
+  TColSpecList = class(TObjectList<TColSpec>);
+{$else}
   TColSpecList = class(TObjectList)
   private
     function GetItem(Index: Integer): TColSpec; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: TColSpec read GetItem; default;
   end;
+{$endif}
 
   THtmlTable = class;
 
@@ -1515,12 +1621,16 @@ type
     procedure PushNewProp(Sym: TElemSymb; Properties: TProperties; Attributes: TAttributeList; const APseudo: ThtString = '');
   end;
 
+{$ifdef UseGenerics}
+  TFormData = class(TObjectList<ThtStringList>);
+{$else}
   TFormData = class(TObjectList)
   private
     function Get(Index: Integer): ThtStringList; {$ifdef UseInline} inline; {$endif}
   public
     property Items[Index: Integer]: ThtStringList read Get; default;
   end;
+{$endif}
 
   ThtDocument = class(TCell) {a list of all the sections -- the html document}
   private
@@ -1614,7 +1724,7 @@ type
     TabOrderList: TStringList;
     FirstPageItem: Boolean;
     StopTab: Boolean;
-    InlineList: TObjectList; {actually TInlineList, a list of ThtInlineRec's}
+    InlineList: TInlineList; {actually TInlineList, a list of ThtInlineRec's}
     TableNestLevel: Integer;
     InLogic2: Boolean;
     LinkDrawnEvent: TLinkDrawnEvent;
@@ -1641,7 +1751,7 @@ type
     function GetURL(Canvas: TCanvas; X, Y: Integer; out UrlTarg: TUrlTarget; out FormControl: TIDObject {TImageFormControlObj}; out ATitle: ThtString): ThtguResultType; override;
     procedure CancelActives;
     procedure CheckGIFList(Sender: TObject);
-    procedure Clear; override;
+    procedure Clear; virtual;
     procedure ClearLists;
     procedure GetBackgroundImage;
     procedure HideControls;
@@ -1734,7 +1844,7 @@ uses
   or defined(JPM_DEBUGGING_CREATE)
   or defined(JPM_DEBUGGING_LOGIC)
 }
- CodeSiteLogging,
+  CodeSiteLogging,
 {$ifend}
 {$IFNDEF NoGDIPlus}
   GDIPL2A,
@@ -2288,29 +2398,6 @@ type
   TSectionClass = class of TSectionBase;
   EProcessError = class(Exception);
 
-type
-  ThtInlineRec = class
-  private
-    StartB, EndB, IDB, StartBDoc, EndBDoc: Integer;
-    MargArray: ThtMarginArray;
-  end;
-
-  TInlineList = class(TObjectList) {a list of ThtInlineRec's}
-  private
-    NeedsConverting: Boolean;
-    Owner: ThtDocument;
-    procedure AdjustValues;
-    function Get(Index: Integer): ThtInlineRec; {$ifdef UseInline} inline; {$endif}
-    function GetStartB(I: Integer): Integer;
-    function GetEndB(I: Integer): Integer;
-  public
-    constructor Create(AnOwner: ThtDocument);
-    procedure Clear; override;
-    property Items[Index: Integer]: ThtInlineRec read Get; default;
-    property StartB[I: Integer]: Integer read GetStartB;
-    property EndB[I: Integer]: Integer read GetEndB;
-  end;
-
 constructor TFontObj.Create(ASection: TSection; F: ThtFont; Position: Integer);
 begin
   inherited Create;
@@ -2405,6 +2492,7 @@ begin
     Viewer.LinkAttributes.Text := UrlTarget.Attr;
     Viewer.LinkText := Viewer.GetTextByIndices(UrlTarget.Start, UrlTarget.Last);
     Viewer.TriggerUrlAction; {call to UrlAction via message}
+    Key := 0; {Key has been consumed}
   end
   else {send other keys to THtmlViewer}
     Viewer.KeyDown(Key, Shift);
@@ -2482,11 +2570,14 @@ begin
 end;
 
 destructor TFontObj.Destroy;
+{$ifndef NoTabLink}
 var Index: Integer;
+{$endif}
 begin
   FIArray.Free;
   TheFont.Free;
   UrlTarget.Free;
+{$ifndef NoTabLink}
   if FSection <> nil then
     if FSection.Document <> nil then
       if FSection.Document.TabOrderList <> nil then
@@ -2496,6 +2587,7 @@ begin
           if Index >= 0 then
             Delete(Index);
         end;
+{$endif}
   TabControl.Free;
   inherited Destroy;
 end;
@@ -2607,7 +2699,7 @@ end;
 //-- BG ---------------------------------------------------------- 10.02.2013 --
 function TFontList.GetFont(Index: Integer): TFontObj;
 begin
-  Result := inherited Get(Index);
+  Result := TFontObj(inherited Items[Index]);
 end;
 
 function TFontList.GetFontAt(Posn: Integer; out OHang: Integer): ThtFont;
@@ -2811,9 +2903,14 @@ begin
 end;
 
 destructor TImageObj.Destroy;
+var
+  I: Integer;
 begin
   if not IsCopy then
   begin
+    I := Document.IDNameList.IndexOfObject(Self);
+    if I >= 0 then
+      Document.IDNameList.Delete(I);
     if (Source <> '') and Assigned(OrigImage) then
       Document.ImageCache.DecUsage(htUpperCase(htTrim(Source)));
     if (Image is ThtGifImage) and ThtGifImage(Image).Gif.IsCopy then
@@ -3503,8 +3600,12 @@ begin
         begin
           if B then
           begin
-            ControlList[I].TheControl.SetFocus;
-            break;
+            with Ctrl as TRadioButtonFormControlObj do
+            begin
+              TheControl.SetFocus;
+              Checked := True;
+            end;
+            Break;
           end;
           if Ctrl.TheControl = Sender then
             B := True
@@ -3518,13 +3619,18 @@ begin
         begin
           if B then
           begin
-            ControlList[I].TheControl.SetFocus;
-            break;
+            with Ctrl as TRadioButtonFormControlObj do
+            begin
+              TheControl.SetFocus;
+              Checked := True;
+            end;
+            Break;
           end;
           if Ctrl.TheControl = Sender then
             B := True
         end;
       end;
+    Key := 0; {Key has been consumed}
   end
   else {send other keys to THtmlViewer}
     Document.TheOwner.KeyDown(Key, Shift);
@@ -5063,13 +5169,6 @@ begin
 
   ConvMargArray(AvailableWidth, AvailableHeight, AutoCount);
   //HideOverflow := HideOverflow and (MargArray[piWidth] <> Auto) and (MargArray[piWidth] > 20);
-  if HideOverflow and (MargArray[piWidth] <> Auto) and (MargArray[piWidth] > 20) then
-  begin
-    MinCell := MargArray[piWidth];
-    MaxCell := MinCell;
-  end
-  else
-    ContentMinMaxWidth(Canvas, MinCell, MaxCell, AvailableWidth, AvailableHeight);
   if MargArray[MarginLeft] = Auto then
     MargArray[MarginLeft] := 0;
   if MargArray[MarginRight] = Auto then
@@ -5078,6 +5177,13 @@ begin
     MargArray[piWidth] := 0;
   LeftSide := MargArray[MarginLeft] + MargArray[BorderLeftWidth] + MargArray[PaddingLeft];
   RightSide := MargArray[MarginRight] + MargArray[BorderRightWidth] + MargArray[PaddingRight];
+  if HideOverflow and (MargArray[piWidth] <> Auto) and (MargArray[piWidth] > 20) then
+  begin
+    MinCell := MargArray[piWidth];
+    MaxCell := MinCell;
+  end
+  else
+    ContentMinMaxWidth(Canvas, MinCell, MaxCell, AvailableWidth - LeftSide - RightSide, AvailableHeight);
   if MargArray[piWidth] > 0 then
   begin
     Min := MargArray[piWidth] + LeftSide + RightSide;
@@ -5442,15 +5548,24 @@ var
   function GetClientContentBot(ClientContentBot: Integer): Integer;
   var
     H: Integer;
+    S: Variant;
   begin
-    if VarIsIntNull(MargArrayO[piHeight]) then
-      Result := Max(ContentTop, ClientContentBot)
+    S := MargArrayO[piHeight];
+    if VarIsIntNull(S) or VarIsAuto(S) then
+      H := Auto
     else
     begin
-      if Pos('%', VarToStr(MargArrayO[piHeight])) > 0 then
-        H := LengthConv(MargArrayO[piHeight], False, AHeight, EmSize, ExSize, 0)
+      if Pos('%', VarToStr(S)) > 0 then
+        H := LengthConv(S, False, AHeight, EmSize, ExSize, 0)
       else
         H := MargArray[piHeight];
+    end;
+
+    case H of
+      IntNull,
+      Auto:
+        Result := Max(ContentTop, ClientContentBot);
+    else
       Result := Max(H + ContentTop, ContentTop);
     end;
   end;
@@ -6626,10 +6741,11 @@ function TTableBlock.FindWidth(Canvas: TCanvas; AWidth, AHeight, AutoCount: Inte
 var
   LeftSide, RightSide: Integer;
   Min, Max, M, P: Integer;
+  LJustify: ThtJustify;
 begin
   if not HasCaption then
   begin
-    inherited FindWidth(Canvas, AWidth, AHeight, AUtoCount);
+    inherited FindWidth(Canvas, AWidth, AHeight, AutoCount);
 //    if MargArray[MarginLeft] = Auto then
 //      MargArray[MarginLeft] := 0;
 //    if MargArray[MarginRight] = Auto then
@@ -6695,22 +6811,35 @@ begin
   end;
   MargArray[piWidth] := Result;
 
-  if (MargArray[MarginLeft] = 0) and (MargArray[MarginRight] = 0) and (Result + LeftSide + RightSide < AWidth) then
+  if Result + LeftSide + RightSide < AWidth then
   begin
-     M := AWidth - LeftSide - Result - RightSide;
-    case Justify of
-      Centered:
-      begin
-        MargArray[MarginLeft]  := M div 2;
-        MargArray[MarginRight] := M - MargArray[MarginLeft];
+    if (MargArray[MarginLeft] = 0) and (MargArray[MarginRight] = 0) then
+    begin
+      M := AWidth - LeftSide - Result - RightSide;
+      LJustify := Justify;
+      if LJustify = NoJustify then
+        if VarIsAuto(MargArrayO[MarginLeft]) then
+          if VarIsAuto(MargArrayO[MarginRight]) then
+            LJustify := Centered
+          else
+            LJustify := Right
+        else
+          if VarIsAuto(MargArrayO[MarginRight]) then
+            LJustify := Left;
+
+      case LJustify of
+        Centered:
+        begin
+          MargArray[MarginLeft]  := M div 2;
+          MargArray[MarginRight] := M - MargArray[MarginLeft];
+        end;
+
+        Right:
+          MargArray[MarginLeft] := M;
+
+        Left:
+          MargArray[MarginRight] := M;
       end;
-
-      Right:
-        MargArray[MarginLeft] := M;
-
-      Left:
-        MargArray[MarginRight] := M;
-
     end;
   end;
 end;
@@ -8220,11 +8349,14 @@ begin
     Result := 99999999;
 end;
 
+{$ifdef UseGenerics}
+{$else}
 //-- BG ---------------------------------------------------------- 06.10.2016 --
 function TInlineList.Get(Index: Integer): ThtInlineRec;
 begin
   Result := inherited Get(Index);
 end;
+{$endif}
 
 function TInlineList.GetEndB(I: Integer): Integer;
 begin
@@ -8378,6 +8510,10 @@ begin
     ConvMargArray(MargArrayO, 100, 0, EmSize, ExSize, 0, AutoCount, MargArray);
     if VarIsStr(MargArrayO[piWidth]) and (MargArray[piWidth] >= 0) then
       FSpecWd := ToSpecWidth(MargArray[piWidth], MargArrayO[piWidth]);
+    if VarIsStr(MargArrayO[piMinWidth]) and (MargArray[piMinWidth] >= 0) then
+      FSpecWdMin := ToSpecWidth(MargArray[piMinWidth], MargArrayO[piMinWidth]);
+    if VarIsStr(MargArrayO[piMaxWidth]) and (MargArray[piMaxWidth] >= 0) then
+      FSpecWdMax := ToSpecWidth(MargArray[piMaxWidth], MargArrayO[piMaxWidth]);
     if VarIsStr(MargArrayO[piHeight]) and (MargArray[piHeight] >= 0) then
       FSpecHt := ToSpecWidth(MargArray[piHeight], MargArrayO[piHeight]);
 
@@ -8995,11 +9131,14 @@ begin
 {$ENDIF}
 end;
 
+{$ifdef UseGenerics}
+{$else}
 //-- BG ---------------------------------------------------------- 12.09.2010 --
 function TCellList.GetCellObj(Index: Integer): TCellObjBase;
 begin
   Result := inherited Get(Index);
 end;
+{$endif}
 
 {----------------TCellList.Draw}
 
@@ -9820,6 +9959,25 @@ begin
           CellObj.Cell.MinMaxWidth(Canvas, CellMin, CellMax, 0, 0);
           CellPercent := 0;
           CellRel := 0;
+
+          with CellObj.SpecWdMin do
+          begin
+            case VType of
+              wtAbsolute:
+                if CellMin < Value then
+                  CellMin := Value;
+            end;
+          end;
+
+          with CellObj.SpecWdMax do
+          begin
+            case VType of
+              wtAbsolute:
+                if CellMax > Value then
+                  CellMax := Value;
+            end;
+          end;
+
           with CellObj.SpecWd do
           begin
             CellSpec := VType;
@@ -9833,13 +9991,13 @@ begin
                 //CellMin := Max(CellMin, Value);   // CellMin should be at least the given absolute value
                 //CellMax := Min(CellMax, Value);   // CellMax should be at most  the given absolute value
                 CellMax := Value;   // CellMax should be at most  the given absolute value
-                CellMax := Max(CellMax, CellMin); // CellMax should be at least CellMin
               end;
 
               wtRelative:
                 CellRel := Value;
             end;
           end;
+          CellMax := Max(CellMax, CellMin); // CellMax should be at least CellMin
           Inc(CellMin, CellSpacingHorz + CellObj.HzSpace);
           Inc(CellMax, CellSpacingHorz + CellObj.HzSpace);
 
@@ -11145,6 +11303,8 @@ begin
 
   FO := TFontObj.Create(Self, Prop.Font, 0);
   FO.Title := Prop.PropTitle;
+  Prop.GetVertAlign(FO.SScript);
+
   if Assigned(AnURL) and (Length(AnURL.Url) > 0) then
   begin
     FO.CreateFIArray;
@@ -13459,12 +13619,12 @@ var
         SetTextAlign(Canvas.Handle, TA_BaseLine);
       {figure any offset for subscript or superscript}
         with FO do
-          if SScript = ANone then
-            Addon := 0
-          else if SScript = ASuper then
-            Addon := -(FontHeight div 3)
+          case SScript of
+            aSuper: Addon := -(FontHeight div 3);
+            aSub  : Addon := Descent div 2 + 1;
           else
-            Addon := Descent div 2 + 1;
+            Addon := 0;
+          end;
         NewCP := NewCP or (Addon <> 0);
       {calc a new CP if required}
         if NewCP then
@@ -14721,18 +14881,7 @@ begin
   {$ENDIF}
 end;
 
-
 { TDrawList }
-
-type
-  TImageRec = class(TObject)
-  public
-    AObj: TImageObj;
-    ACanvas: TCanvas;
-    AX, AY: Integer;
-    AYBaseline: Integer;
-    AFO: TFontObj;
-  end;
 
 procedure TDrawList.AddImage(Obj: TImageObj; Canvas: TCanvas; X, Y, YBaseline: Integer; FO: TFontObj);
 var
@@ -15349,7 +15498,11 @@ end;
 //-- BG ---------------------------------------------------------- 15.01.2011 --
 function TFormControlObjList.GetItem(Index: Integer): TFormControlObj;
 begin
+{$ifdef UseGenerics}
+  Result := inherited Items[Index] as TFormControlObj;
+{$else}
   Result := Get(Index);
+{$endif}
 end;
 
 { TSizeableObj }
@@ -16000,10 +16153,13 @@ begin
     end
 end;
 
+{$ifdef UseGenerics}
+{$else}
 function TSectionBaseList.GetItem(Index: Integer): TSectionBase;
 begin
   Result := inherited Get(Index);
 end;
+{$endif}
 
 function TSectionBaseList.PtInObject(X, Y: Integer; var Obj: TObject; var IX, IY: Integer): Boolean;
 {Y is absolute}
@@ -16272,6 +16428,9 @@ begin
   end;
 end;
 
+{$ifdef UseGenerics}
+{$else}
+
 { TRowList }
 
 //-- BG ---------------------------------------------------------- 26.12.2011 --
@@ -16287,6 +16446,8 @@ function TColSpecList.GetItem(Index: Integer): TColSpec;
 begin
   Result := Get(Index);
 end;
+
+{$endif}
 
 { TColSpec }
 
@@ -16401,11 +16562,20 @@ begin
     Result := nil;
 end;
 
+{$ifdef UseGenerics}
+{$else}
 //-- BG ---------------------------------------------------------- 07.08.2013 --
 function TFloatingObjList.GetItem(Index: Integer): TFloatingObj;
 begin
   Result := Get(Index);
 end;
+
+//-- BG ---------------------------------------------------------- 07.08.2013 --
+procedure TFloatingObjList.SetItem(Index: Integer; const Item: TFloatingObj);
+begin
+  Put(Index, Item);
+end;
+{$endif}
 
 //-- BG ---------------------------------------------------------- 05.08.2013 --
 function TFloatingObjList.GetObjectAt(Posn: Integer; out Obj): Integer;
@@ -16490,12 +16660,6 @@ begin
   Result := False;
 end;
 
-//-- BG ---------------------------------------------------------- 07.08.2013 --
-procedure TFloatingObjList.SetItem(Index: Integer; const Item: TFloatingObj);
-begin
-  Put(Index, Item);
-end;
-
 { TBlockBase }
 
 //-- BG ---------------------------------------------------------- 31.08.2013 --
@@ -16573,6 +16737,9 @@ begin
     end;
 end;
 
+{$ifdef UseGenerics}
+{$else}
+
 { ThtIndexObjList }
 
 //-- BG ---------------------------------------------------------- 06.10.2016 --
@@ -16620,6 +16787,7 @@ function TPanelObjList.Get(Index: Integer): TPanelObj;
 begin
   Result := inherited Get(Index);
 end;
+{$endif}
 
 initialization
 {$ifdef UNICODE}
