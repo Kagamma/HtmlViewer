@@ -4407,7 +4407,7 @@ begin
   while I < Count do
   begin
     TB := Items[I];
-    if TB is TSection and (Length(Trim(TSection(TB).BuffS)) = 0) then
+    if (TB is TSection) and (Length(Trim(TSection(TB).BuffS)) = 0) then
     else if not (TB is TBlock) or (TBlock(TB).Positioning <> PosAbsolute) then
         break;
 
@@ -4431,7 +4431,7 @@ begin
   while J >= I do
   begin
     TB := Items[J];
-    if TB is TSection and (Length(Trim(TSection(TB).BuffS)) = 0) then
+    if (TB is TSection) and (Length(Trim(TSection(TB).BuffS)) = 0) then
     else if not (TB is TBlock) or (TBlock(TB).Positioning <> PosAbsolute) then
       break;
 
@@ -5860,7 +5860,7 @@ function TBlock.Draw1(Canvas: TCanvas; const ARect: TRect; IMgr: TIndentManager;
           if Result < Document.PageBottom then
             Document.PageBottom := Result;
       end
-      else if Self is TTableBlock and not TTableBlock(Self).Table.HeadOrFoot then {ordinary tables}
+      else if (Self is TTableBlock) and (not TTableBlock(Self).Table.HeadOrFoot) then {ordinary tables}
       {if we're printing and
        we're 2/3 down page and table won't fit on this page and table will fit on
        next page, then don't do table now}
