@@ -33,6 +33,9 @@ are covered by separate copyright notices located in those modules.
 //  {$IFEND}
 //{$ENDIF}
 {$ifdef FPC}
+{$IF DEFINED(LCLQt5)}
+ {$define OwnPaintPanelDoubleBuffering}
+{$ENDIF}
 
 { Identify FreePascal/Lazarus Compiler Version }
 
