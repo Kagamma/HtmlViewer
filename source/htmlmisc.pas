@@ -1109,7 +1109,7 @@ var
   s: String;
 begin
   s := HmStringToString(PWideCharToHmString(Str, Count));
-  Result := WidgetSet.GetTextExtentExPoint(DC, PChar(s), Length(s), p4, p5, p6, p7);
+  Result := WidgetSet.GetTextExtentExPoint(DC, PChar(s), Count, p4, p5, p6, p7);
 {$ENDIF}
 end;
 
