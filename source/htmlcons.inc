@@ -421,4 +421,8 @@ should become:
         ThtEdit(TFormControlObj(Items[I]).TheControl).Text := ........
 }
 
+{$IF DEFINED(LCLQt5)}
+ {$define OwnPaintPanelDoubleBuffering}
+{$ENDIF}
+
 

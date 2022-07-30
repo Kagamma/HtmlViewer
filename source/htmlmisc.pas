@@ -1109,7 +1109,7 @@ var
   s: String;
 begin
   s := HmStringToString(PWideCharToHmString(Str, Count));
-  Result := WidgetSet.GetTextExtentExPoint(DC, PChar(s), Length(s), p4, p5, p6, p7);
+  Result := WidgetSet.GetTextExtentExPoint(DC, PChar(s), count, p4, p5, p6, p7);
 {$ENDIF}
 end;
 
@@ -1285,7 +1285,7 @@ end;
 {$ENDIF}
 
 initialization
-  htExpectsUTF8 := WidgetSet.LCLPlatform in [lpCarbon, lpQt, lpGTK2, lpWin32];
+  htExpectsUTF8 := WidgetSet.LCLPlatform in [lpCarbon, lpQt, lpQt5, lpGTK2, lpWin32];
 {$IFNDEF NoFlatScrollbars}
   InitFlatSB;
 {$ENDIF}
